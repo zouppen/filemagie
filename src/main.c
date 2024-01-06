@@ -20,13 +20,20 @@
 #include <stdlib.h>
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdbool.h>
 #include <glib.h>
 
 static gchar *target_file = NULL;
+static gboolean force = false;
+static gboolean append = false;
 
 static GOptionEntry entries[] =
 {
 	{ "target-file", 't', 0, G_OPTION_ARG_FILENAME, &target_file, "Glue all SOURCE arguments into TARGET", "TARGET"},
+	{ "force", 'f', 0, G_OPTION_ARG_NONE, &force, "Force overwrite of target file", NULL},
+	{ "append", 'a', 0, G_OPTION_ARG_NONE, &append, "Append to the target file (non-atomic)", NULL},
 	{ NULL }
 };
 
@@ -59,7 +66,29 @@ int main(int argc, char **argv)
 		errx(1, "Missing file names. See %s --help", argv[0]);
 	}
 
+	int flags_out = 0;
+	if (force) {
+		flags_out = O_CREAT;
+	} else if (append) {
+		flags_out = 0;
+	} else {
+		flags_out = O_CREAT | O_EXCL;
+	}
+
+	int const fd_out = open(target_file, O_WRONLY | flags_out, 0666);
+	if (fd_out == -1) {
+		err(2, "Unable to open '%s' for writing", target_file);
+	}
+
 	for (int source_i=0; source_i<sources; source_i++) {
+		int const fd_in = open(source[source_i], O_RDONLY);
+		if (fd_in == -1) {
+			err(2, "Unable to open '%s' for reading", source[source_i]);
+		}
+
+		if (close(fd_in) == -1) {
+			err(2, "Unable to close file '%s'", source[source_i]);
+		}
 	}
 
 	return 0;
