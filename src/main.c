@@ -16,6 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #define _GNU_SOURCE
+#define _FILE_OFFSET_BITS 64
 #include <stdio.h>
 #include <stdlib.h>
 #include <err.h>
@@ -23,6 +24,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <linux/fs.h> // Definition of FICLONE* constants
+#include <sys/ioctl.h>
 #include <glib.h>
 
 static gchar *target_file = NULL;
@@ -66,13 +69,20 @@ int main(int argc, char **argv)
 		errx(1, "Missing file names. See %s --help", argv[0]);
 	}
 
-	int flags_out = 0;
+	// I miss pattern matching from Haskell
+	int flags_out;
 	if (force) {
-		flags_out = O_CREAT;
-	} else if (append) {
-		flags_out = 0;
+		if (append) {
+			flags_out = O_CREAT;
+		} else {
+			flags_out = O_CREAT | O_TRUNC;
+		}
 	} else {
-		flags_out = O_CREAT | O_EXCL;
+		if (append) {
+			flags_out = 0;
+		} else {
+			flags_out = O_CREAT | O_EXCL;
+		}
 	}
 
 	int const fd_out = open(target_file, O_WRONLY | flags_out, 0666);
@@ -84,6 +94,22 @@ int main(int argc, char **argv)
 		int const fd_in = open(source[source_i], O_RDONLY);
 		if (fd_in == -1) {
 			err(2, "Unable to open '%s' for reading", source[source_i]);
+		}
+
+		off_t pos = lseek(fd_out, 0, SEEK_END);
+		if (pos == -1) {
+			err(3, "Unable to seek '%s', is it a regular file?", target_file);
+		}
+
+		struct file_clone_range range = {
+			.src_fd = fd_in,
+			.src_offset = 0,
+			.src_length = 0,
+			.dest_offset = pos,
+		};
+
+		if (ioctl(fd_out, FICLONERANGE, &range) == -1) {
+			err(3, "Unable to do range clone on '%s'", source[source_i]);
 		}
 
 		if (close(fd_in) == -1) {
