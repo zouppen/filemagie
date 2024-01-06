@@ -45,12 +45,21 @@ int main(int argc, char **argv)
 		errx(1, "Option parsing failed: %s", error->message);
 	}
 
-	int const sources = target_file == NULL ? argc-2 : argc-1;
+	int sources;
+	if (target_file == NULL) {
+		target_file = argv[argc-1];
+		sources = argc-2;
+	} else {
+		sources = argc-1;
+	}
 	char **source = argv+1;
 
 	// Command validation and selection
 	if (sources < 1) {
 		errx(1, "Missing file names. See %s --help", argv[0]);
+	}
+
+	for (int source_i=0; source_i<sources; source_i++) {
 	}
 
 	return 0;
