@@ -20,10 +20,11 @@ to be stored in fragments during transfer but allowing space and time
 efficient merge of the results.
 
 **NB!** To benefit from reflink feature, on Btrfs the file "seams"
-need to be at multiples of the fundamental block size of the
-file system. Otherwise, warning is printed and a regular
-copy is performed. To see the block size of current directory, you may
-`stat -fc %S .`. Also, the files need to be on a same file system.
+need to be at multiples of the fundamental block size of the file
+system. And naturally, the files need to be on a same file
+system. Otherwise, warning is printed and a regular copy is
+performed. To see the block size of current directory, you may `stat
+-fc %S .`.
 
 ## Building
 
