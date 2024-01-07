@@ -31,7 +31,7 @@
 #include <glib.h>
 
 // Copy given part of src to dst
-bool reflink_copy_from(int src, int dst, off_t start, off_t count);
+bool reflink_copy_from(int const src, int const dst, off_t const start, off_t const count);
 
 // Count number of digits in a integer number of given base
 static int digits(off_t const a, int base);
@@ -114,7 +114,6 @@ int main(int argc, char **argv)
 	int const flags_out = O_CREAT | (overwrite ? O_TRUNC : O_EXCL);
 
 	off_t const tail_size = source_len - (chunks-1) * chunk_size;
-	printf("File size %ld, chunk size %ld, chunks %ld, format string %s\n", source_len, chunk_size, chunks, format);
 
 	for (uint64_t i=0; i<chunks; i++) {
 		char *target_file;
@@ -127,21 +126,24 @@ int main(int argc, char **argv)
 			err(2, "Unable to open '%s' for writing", target_file);
 		}
 
-		off_t bytes = i+1 == chunks ? tail_size : chunk_size;
+		bool const is_last = i+1 == chunks;
+		off_t bytes = is_last ? tail_size : chunk_size;
 
 		if (!reflink_copy_from(fd_in, fd_out, i*chunk_size, bytes)) {
-			err(3, "Unable to perform reflink split to '%s'", target_file);
+			err(3, "Unable to perform reflink split to '%s'. Is the fragment a multiple of block size?", target_file);
 		}
 
 		if (close(fd_out) == -1) {
 			err(2, "Unable to close file '%s'", target_file);
 		}
+
+		free(target_file);
 	}
 
 	return 0;
 }
 
-bool reflink_copy_from(int src, int dst, off_t start, off_t count)
+bool reflink_copy_from(int const src, int const dst, off_t const start, off_t const count)
 {
 	struct file_clone_range range = {
 		.src_fd = src,
