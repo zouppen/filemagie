@@ -24,3 +24,9 @@ add_executable(kleb src/kleb.c ${COMMON_FILES})
 target_link_libraries(kleb PUBLIC
     PkgConfig::GLIB
 )
+
+# Trenn tool
+add_executable(trenn src/trenn.c ${COMMON_FILES})
+target_link_libraries(trenn PUBLIC
+    PkgConfig::GLIB
+)
