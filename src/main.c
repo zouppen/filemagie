@@ -66,17 +66,17 @@ int main(int argc, char **argv)
 		errx(1, "Option parsing failed: %s", error->message);
 	}
 
-	int sources;
+	char **source_endp;
 	if (target_file == NULL) {
 		target_file = argv[argc-1];
-		sources = argc-2;
+		source_endp = argv+argc-1;
 	} else {
-		sources = argc-1;
+		source_endp = argv+argc;
 	}
 	char **source = argv+1;
 
 	// Command validation and selection
-	if (sources < 1) {
+	if (source >= source_endp) {
 		errx(1, "Missing file names. See %s --help", argv[0]);
 	}
 
@@ -101,27 +101,27 @@ int main(int argc, char **argv)
 		err(2, "Unable to open '%s' for writing", target_file);
 	}
 
-	for (int source_i=0; source_i<sources; source_i++) {
-		int const fd_in = open(source[source_i], O_RDONLY);
+	do {
+		int const fd_in = open(*source, O_RDONLY);
 		if (fd_in == -1) {
-			err(2, "Unable to open '%s' for reading", source[source_i]);
+			err(2, "Unable to open '%s' for reading", *source);
 		}
 
 		if (!reflink_copy(fd_in, fd_out)) {
 			if (strict) {
-				err(3, "Unable to reflink '%s'", source[source_i]);
+				err(3, "Unable to reflink '%s'", *source);
 			} else {
-				warnx("Falling back to a regular copy on '%s'", source[source_i]);
+				warnx("Falling back to a regular copy on '%s'", *source);
 				if (!regular_copy(fd_in, fd_out)) {
-					err(3, "Unable do regular copy on '%s'", source[source_i]);
+					err(3, "Unable do regular copy on '%s'", *source);
 				}
 			}
 		}
 
 		if (close(fd_in) == -1) {
-			err(2, "Unable to close file '%s'", source[source_i]);
+			err(2, "Unable to close file '%s'", *source);
 		}
-	}
+	} while (++source < source_endp);
 
 	return 0;
 }
