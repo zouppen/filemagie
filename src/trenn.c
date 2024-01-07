@@ -30,9 +30,8 @@
 #include <sys/ioctl.h>
 #include <glib.h>
 
-// Seeks to the end of the dst and appends src to dest using a reflink
-// copy.
-static bool reflink_copy(int const src, int const dst);
+// Copy given part of src to dst
+bool reflink_copy_from(int src, int dst, off_t start, off_t count);
 
 // Count number of digits in a integer number of given base
 static int digits(off_t const a, int base);
@@ -45,10 +44,12 @@ static uint64_t parse_unit(char const *const s);
 // error.
 char *new_format_string(off_t const peak_value);
 
+static gboolean overwrite = false;
 static gchar *size_str = NULL;
 
 static GOptionEntry entries[] =
 {
+	{ "overwrite", 'o', 0, G_OPTION_ARG_NONE, &overwrite, "Allow overwrite of target files", NULL},
 	{ "size", 's', 0, G_OPTION_ARG_STRING, &size_str, "Target chunk size", "SIZE"},
 	{ NULL }
 };
@@ -104,23 +105,52 @@ int main(int argc, char **argv)
 	uint64_t const chunks = (source_len-1)/chunk_size+1; // Round up
 
 	// Prepares a format string which fits the given chunk count
-	char const *const format = new_format_string(chunks);
+	// (counting from 0)
+	char const *const format = new_format_string(chunks-1);
 	if (format == NULL) {
 		errx(100, "Chunk file name formatting error");
 	}
 
-	printf("File size %ld, chunk size %ld, format string %s\n", source_len, chunk_size, format);
+	int const flags_out = O_CREAT | (overwrite ? O_TRUNC : O_EXCL);
 
-	for (uint64_t i=1; i<chunks; i++) {
-		char *file;
-		if (asprintf(&file, format, source, i) == -1) {
+	off_t const tail_size = source_len - (chunks-1) * chunk_size;
+	printf("File size %ld, chunk size %ld, chunks %ld, format string %s\n", source_len, chunk_size, chunks, format);
+
+	for (uint64_t i=0; i<chunks; i++) {
+		char *target_file;
+		if (asprintf(&target_file, format, source, i) == -1) {
 			errx(100, "Chunk file name formatting error");
 		}
-		// And use it somewhere
-		puts(file);
+
+		int const fd_out = open(target_file, O_WRONLY | flags_out, 0666);
+		if (fd_out == -1) {
+			err(2, "Unable to open '%s' for writing", target_file);
+		}
+
+		off_t bytes = i+1 == chunks ? tail_size : chunk_size;
+
+		if (!reflink_copy_from(fd_in, fd_out, i*chunk_size, bytes)) {
+			err(3, "Unable to perform reflink split to '%s'", target_file);
+		}
+
+		if (close(fd_out) == -1) {
+			err(2, "Unable to close file '%s'", target_file);
+		}
 	}
 
 	return 0;
+}
+
+bool reflink_copy_from(int src, int dst, off_t start, off_t count)
+{
+	struct file_clone_range range = {
+		.src_fd = src,
+		.src_offset = start,
+		.src_length = count,
+		.dest_offset = 0,
+	};
+
+	return ioctl(dst, FICLONERANGE, &range) != -1;
 }
 
 static int digits(off_t a, int base)
