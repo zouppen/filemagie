@@ -24,19 +24,24 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <linux/fs.h> // Definition of FICLONE* constants
 #include <sys/ioctl.h>
 #include <glib.h>
 
+static bool regular_copy(int const src, int const dst);
+
 static gchar *target_file = NULL;
 static gboolean force = false;
 static gboolean append = false;
+static gboolean strict = false;
 
 static GOptionEntry entries[] =
 {
 	{ "target-file", 't', 0, G_OPTION_ARG_FILENAME, &target_file, "Glue all SOURCE arguments into TARGET", "TARGET"},
 	{ "force", 'f', 0, G_OPTION_ARG_NONE, &force, "Force overwrite of target file", NULL},
 	{ "append", 'a', 0, G_OPTION_ARG_NONE, &append, "Append to the target file (non-atomic)", NULL},
+	{ "strict", 's', 0, G_OPTION_ARG_NONE, &strict, "Do not fallback to regular copy if reflinking fails", NULL},
 	{ NULL }
 };
 
@@ -109,7 +114,14 @@ int main(int argc, char **argv)
 		};
 
 		if (ioctl(fd_out, FICLONERANGE, &range) == -1) {
-			err(3, "Unable to do range clone on '%s'", source[source_i]);
+			if (strict) {
+				err(3, "Unable to reflink '%s'", source[source_i]);
+			} else {
+				warnx("Falling back to a regular copy on '%s'", source[source_i]);
+				if (regular_copy(fd_in, fd_out) == false) {
+					err(3, "Unable do regular copy on '%s'", source[source_i]);
+				}
+			}
 		}
 
 		if (close(fd_in) == -1) {
@@ -118,4 +130,26 @@ int main(int argc, char **argv)
 	}
 
 	return 0;
+}
+
+static bool regular_copy(int const src, int const dst)
+{
+	// FIXME: This is way too small buffer
+	uint8_t buf[4096];
+	while (true) {
+		ssize_t bytes_in = read(src, buf, sizeof(buf));
+		switch (bytes_in) {
+		case -1:
+			return false;
+		case 0:
+			return true;
+		default:
+			ssize_t bytes_out = write(dst, buf, bytes_in);
+			// Partial writes shouldn't happen. FIXME:
+			// handle that case anyway instead of just failing?
+			if (bytes_in != bytes_out) {
+				return false;
+			}
+		}
+	}
 }
