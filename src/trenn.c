@@ -22,6 +22,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -31,7 +32,7 @@
 #include <glib.h>
 
 // Copy given part of src to dst
-bool reflink_copy_from(int const src, int const dst, off_t const start, off_t const count);
+static bool reflink_copy_from(int const src, int const dst, off_t const start, off_t const count);
 
 // Count number of digits in a integer number of given base
 static int digits(off_t const a, int base);
@@ -42,15 +43,20 @@ static uint64_t parse_unit(char const *const s);
 // Generates printf format string which can fit the given peak
 // value. Returns freshly allocated buffer or NULL in case of an
 // error.
-char *new_format_string(off_t const peak_value);
+static char *new_format_string(off_t const peak_value);
+
+// Returns the last character of a string (or \0 if zero-length string or NULL)
+static char last_char(char const *s);
 
 static gboolean overwrite = false;
 static gchar *size_str = NULL;
+static gchar const *prefix = NULL;
 
 static GOptionEntry entries[] =
 {
 	{ "overwrite", 'o', 0, G_OPTION_ARG_NONE, &overwrite, "Allow overwrite of target files", NULL},
-	{ "size", 's', 0, G_OPTION_ARG_STRING, &size_str, "Target chunk size", "SIZE"},
+	{ "size", 's', 0, G_OPTION_ARG_STRING, &size_str, "Target chunk size (e.g. 1Mi)", "SIZE"},
+	{ "prefix", 'p', 0, G_OPTION_ARG_FILENAME, &prefix, "Write fragments to given prefix (if directory, add /) instead of using input file", "PATH"},
 	{ NULL }
 };
 
@@ -72,6 +78,7 @@ int main(int argc, char **argv)
 	if (argc != 2) {
 		errx(1, "Only one file name is expected");
 	}
+	char const *source = argv[1];
 
 	if (size_str == NULL) {
 		errx(1, "Chunk size must be given with -s");
@@ -89,8 +96,25 @@ int main(int argc, char **argv)
 		errx(1, "Chunk size must be positive");
 	}
 
+	// Making directory if prefix end with /
+	if (last_char(prefix) == '/') {
+		if (mkdir(prefix, 0777) == -1 && !(overwrite && errno == EEXIST)) {
+			err(2, "Unable to make directory '%s'", prefix);
+		}
+	}
+
+	// Output file format
+	char *separator;
+	if (prefix == NULL) {
+		prefix = source;
+		separator = "-";
+	} else {
+		// When prefix is given, assume it has the separator
+		// char if desired.
+		separator = "";
+	}
+
 	// Open input file
-	char const *source = argv[1];
 	int const fd_in = open(source, O_RDONLY);
 	if (fd_in == -1) {
 		err(2, "Unable to open '%s' for reading", source);
@@ -117,7 +141,7 @@ int main(int argc, char **argv)
 
 	for (uint64_t i=0; i<chunks; i++) {
 		char *target_file;
-		if (asprintf(&target_file, format, source, i) == -1) {
+		if (asprintf(&target_file, format, prefix, separator, i) == -1) {
 			errx(100, "Chunk file name formatting error");
 		}
 
@@ -143,7 +167,7 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-bool reflink_copy_from(int const src, int const dst, off_t const start, off_t const count)
+static bool reflink_copy_from(int const src, int const dst, off_t const start, off_t const count)
 {
 	struct file_clone_range range = {
 		.src_fd = src,
@@ -166,10 +190,10 @@ static int digits(off_t a, int base)
 	return x + (pos ? 0 : 1);
 }
 
-char *new_format_string(off_t const peak_value)
+static char *new_format_string(off_t const peak_value)
 {
 	char *s;
-	if (asprintf(&s, "%%s-%%0%d" PRIu64, digits(peak_value, 10)) == -1) {
+	if (asprintf(&s, "%%s%%s%%0%d" PRIu64, digits(peak_value, 10)) == -1) {
 		return NULL;
 	}
 	return s;
@@ -189,4 +213,15 @@ static uint64_t parse_unit(char const *const s)
 	if (strcasecmp(s, "T") == 0) return 1000000000000;
 	if (strcasecmp(s, "P") == 0) return 1000000000000000;
 	return -1;
+}
+
+static char last_char(char const *s)
+{
+	if (s == NULL) return '\0';
+	char c = '\0';
+	while (*s != '\0') {
+		c = *s;
+		s++;
+	}
+	return c;
 }
