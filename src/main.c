@@ -54,7 +54,7 @@ static GOptionEntry entries[] =
 int main(int argc, char **argv)
 {
 	g_autoptr(GError) error = NULL;
-	g_autoptr(GOptionContext) context = g_option_context_new("FILE...");
+	g_autoptr(GOptionContext) context = g_option_context_new("FILE... TARGET | -t TARGET FILE...");
 	g_option_context_add_main_entries(context, entries, NULL);
 	g_option_context_set_summary(context, "File surgery tool on reflink capable file systems.");
 	g_option_context_set_description(context,
@@ -68,6 +68,7 @@ int main(int argc, char **argv)
 
 	char **source_endp;
 	if (target_file == NULL) {
+		// If target file is not specified, assume it's the last arg
 		target_file = argv[argc-1];
 		source_endp = argv+argc-1;
 	} else {
@@ -75,7 +76,6 @@ int main(int argc, char **argv)
 	}
 	char **source = argv+1;
 
-	// Command validation and selection
 	if (source >= source_endp) {
 		errx(1, "Missing file names. See %s --help", argv[0]);
 	}
