@@ -29,6 +29,12 @@
 #include <sys/ioctl.h>
 #include <glib.h>
 
+// Seeks to the end of the dst and appends src to dest using a reflink
+// copy.
+static bool reflink_copy(int const src, int const dst);
+
+// Copies src to dest in a traditional fashion. NB! Doesn't seek,
+// assumes this is run after a failed reflink attempt.
 static bool regular_copy(int const src, int const dst);
 
 static gchar *target_file = NULL;
@@ -101,24 +107,12 @@ int main(int argc, char **argv)
 			err(2, "Unable to open '%s' for reading", source[source_i]);
 		}
 
-		off_t pos = lseek(fd_out, 0, SEEK_END);
-		if (pos == -1) {
-			err(3, "Unable to seek '%s', is it a regular file?", target_file);
-		}
-
-		struct file_clone_range range = {
-			.src_fd = fd_in,
-			.src_offset = 0,
-			.src_length = 0,
-			.dest_offset = pos,
-		};
-
-		if (ioctl(fd_out, FICLONERANGE, &range) == -1) {
+		if (!reflink_copy(fd_in, fd_out)) {
 			if (strict) {
 				err(3, "Unable to reflink '%s'", source[source_i]);
 			} else {
 				warnx("Falling back to a regular copy on '%s'", source[source_i]);
-				if (regular_copy(fd_in, fd_out) == false) {
+				if (!regular_copy(fd_in, fd_out)) {
 					err(3, "Unable do regular copy on '%s'", source[source_i]);
 				}
 			}
@@ -130,6 +124,23 @@ int main(int argc, char **argv)
 	}
 
 	return 0;
+}
+
+static bool reflink_copy(int const src, int const dst)
+{
+	off_t pos = lseek(dst, 0, SEEK_END);
+	if (pos == -1) {
+		err(3, "Unable to seek '%s', is it a regular file?", target_file);
+	}
+
+	struct file_clone_range range = {
+		.src_fd = src,
+		.src_offset = 0,
+		.src_length = 0,
+		.dest_offset = pos,
+	};
+
+	return ioctl(dst, FICLONERANGE, &range) != -1;
 }
 
 static bool regular_copy(int const src, int const dst)
