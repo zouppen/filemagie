@@ -3,7 +3,7 @@
 # Just reduce this version if needed and send me a patch if it
 # works. This is just the version I have.
 cmake_minimum_required(VERSION 3.16)
-project("Kleb" C)
+project("Kuh" C)
 
 # the `pkg_check_modules` function is created with this call
 find_package(PkgConfig REQUIRED) 
@@ -17,10 +17,10 @@ add_compile_options(
     -Wall # enable warnings
 )
 
-file(GLOB SRC_FILES "src/*.c") # Load all files in src folder
+file(GLOB COMMON_FILES "src/common/*.c")
 
-add_executable(kleb ${SRC_FILES})
-
+# Kleb tool
+add_executable(kleb src/kleb.c ${COMMON_FILES})
 target_link_libraries(kleb PUBLIC
     PkgConfig::GLIB
 )
