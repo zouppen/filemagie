@@ -32,14 +32,14 @@
 static bool regular_copy(int const src, int const dst);
 
 static gchar *target_file = NULL;
-static gboolean force = false;
+static gboolean overwrite = false;
 static gboolean append = false;
 static gboolean strict = false;
 
 static GOptionEntry entries[] =
 {
 	{ "target-file", 't', 0, G_OPTION_ARG_FILENAME, &target_file, "Glue all SOURCE arguments into TARGET", "TARGET"},
-	{ "force", 'f', 0, G_OPTION_ARG_NONE, &force, "Force overwrite of target file", NULL},
+	{ "overwrite", 'o', 0, G_OPTION_ARG_NONE, &overwrite, "Allow overwrite of target file", NULL},
 	{ "append", 'a', 0, G_OPTION_ARG_NONE, &append, "Append to the target file (non-atomic)", NULL},
 	{ "strict", 's', 0, G_OPTION_ARG_NONE, &strict, "Do not fallback to regular copy if reflinking fails", NULL},
 	{ NULL }
@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 
 	// I miss pattern matching from Haskell
 	int flags_out;
-	if (force) {
+	if (overwrite) {
 		if (append) {
 			flags_out = O_CREAT;
 		} else {
