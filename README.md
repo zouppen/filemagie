@@ -26,6 +26,19 @@ system. Otherwise, warning is printed and a regular copy is
 performed. To see the block size of current directory, you may `stat
 -fc %S .`.
 
+### Trenn
+
+Does the opposite than Kleb. Splits given source file into fragments
+without copying contents on disk.
+
+Usage: `trenn [OPTION?] -s SIZE FILE`
+
+The size must be a multiple of the fundamental block size of the file
+system. It accepts SI and binary multipliers, so 100Mi equals to
+104857600 bytes.
+
+See full usage by running `trenn --help`.
+
 ## Building
 
 Requires GLib 2 (Debian package `libglib2.0-dev`) to build. The
