@@ -55,7 +55,7 @@ static gchar const *prefix = NULL;
 static GOptionEntry entries[] =
 {
 	{ "overwrite", 'o', 0, G_OPTION_ARG_NONE, &overwrite, "Allow overwrite of target files", NULL},
-	{ "size", 's', 0, G_OPTION_ARG_STRING, &size_str, "Target chunk size (e.g. 1Mi)", "SIZE"},
+	{ "size", 's', 0, G_OPTION_ARG_STRING, &size_str, "Target fragment size (e.g. 1Mi)", "SIZE"},
 	{ "prefix", 'p', 0, G_OPTION_ARG_FILENAME, &prefix, "Write fragments to given prefix (if directory, add /) instead of using input file", "PATH"},
 	{ NULL }
 };
